@@ -2,7 +2,7 @@
 FROM openjdk:17-jdk-alpine
 
 # Set working directory
-WORKDIR /app
+WORKDIR /appx`
 
 # Copy built JAR (adjust filename)
 COPY target/*.jar app.jar

@@ -1,0 +1,4 @@
+  //include ':village-news-backend'
+   //project(':village-news-backend').projectDir = file('C:/Users/pvvnarayana/Downloads/village-news-claude/village-news-backend')
+   rootProject.name = 'village-news-backend'
+   

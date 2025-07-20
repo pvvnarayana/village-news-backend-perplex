@@ -4,6 +4,7 @@ import com.village.news.entity.User;
 import com.village.news.entity.Video;
 import com.village.news.repository.UserRepository;
 import com.village.news.repository.VideoRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -13,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -24,10 +26,12 @@ public class VideoService {
 
     private final UserRepository userRepository;
     private final VideoRepository videoRepository;
+    private final UserService     userService;
 
-    public VideoService(UserRepository userRepository, VideoRepository videoRepository) {
+    public VideoService(UserRepository userRepository, VideoRepository videoRepository, UserService userService) {
         this.userRepository = userRepository;
         this.videoRepository = videoRepository;
+        this.userService = userService;
     }
 
 
@@ -123,6 +127,15 @@ public class VideoService {
         System.out.println("Video rejected successfully: ID=" + videoId);
     }
 
+    public void reject(Long id, String adminEmail) {
+        Video v = videoRepository.findById(id).orElseThrow(() -> new RuntimeException("Video not found"));
+        v.setStatus("REJECTED");
+        v.setApprovedAt(LocalDateTime.now());
+        v.setApprovedBy(userService.findByEmail(adminEmail).get().getId());
+        videoRepository.save(v);
+    }
+
+
     // Video upload method
     public void uploadByUserId(MultipartFile file, String title, Long userId) {
         try {
@@ -188,4 +201,64 @@ public class VideoService {
             videoRepository.deleteById(id);
         }
     }
+
+    public void delete(Long id, String requesterEmail) {
+        Video v = videoRepository.findById(id).orElseThrow(() -> new RuntimeException("Video not found"));
+        boolean isAdmin = userService.findByEmail(requesterEmail).get().getRole() == "ADMIN";
+
+        if (isAdmin || v.getUser().getEmail().equals(requesterEmail)) {
+            // Delete physical file
+            Path p = Paths.get(videoStoragePath).resolve(v.getFilePath());
+            try {
+                Files.deleteIfExists(p);
+            } catch (IOException ignored) {}
+
+            // Delete database record
+            videoRepository.deleteById(id);
+        } else {
+            throw new RuntimeException("Unauthorized delete");
+        }
+    }
+
+    // NEW: Delete all videos by user ID
+    public void deleteByUserId(Long userId, String requesterEmail) {
+        User requester = userService.findByEmail(requesterEmail).get();
+        boolean isAdmin = requester.getRole() == "ADMIN";
+
+        // Only admin can delete all videos of a user
+        if (!isAdmin) {
+            throw new RuntimeException("Only admin can delete all user videos");
+        }
+
+        List<Video> userVideos = videoRepository.findByUserIdOrderByCreatedAtDesc(userId);
+
+        for (Video video : userVideos) {
+            // Delete physical file
+            Path p = Paths.get(videoStoragePath).resolve(video.getFilePath());
+            try {
+                Files.deleteIfExists(p);
+            } catch (IOException ignored) {}
+        }
+
+        // Delete all database records for this user
+        videoRepository.deleteAll(userVideos);
+    }
+
+    // NEW: Delete own videos (for user)
+    public void deleteMyVideos(String userEmail) {
+        User user = userService.findByEmail(userEmail).get();
+        List<Video> userVideos = videoRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+
+        for (Video video : userVideos) {
+            // Delete physical file
+            Path p = Paths.get(videoStoragePath).resolve(video.getFilePath());
+            try {
+                Files.deleteIfExists(p);
+            } catch (IOException ignored) {}
+        }
+
+        // Delete all database records for this user
+        videoRepository.deleteAll(userVideos);
+    }
+
 }

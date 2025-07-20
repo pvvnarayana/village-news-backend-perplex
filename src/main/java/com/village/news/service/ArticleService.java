@@ -16,10 +16,12 @@ public class ArticleService {
 
     private final ArticleRepository articleRepository;
     private final UserRepository userRepository;
+    private final  UserService userService;
 
-    public ArticleService(ArticleRepository articleRepository, UserRepository userRepository) {
+    public ArticleService(ArticleRepository articleRepository, UserRepository userRepository, UserService userService) {
         this.articleRepository = articleRepository;
         this.userRepository = userRepository;
+        this.userService = userService;
     }
 
     public List<Article> getApprovedArticles() {
@@ -119,4 +121,57 @@ public class ArticleService {
     public void deleteArticle(Long id) {
         articleRepository.deleteById(id);
     }
+
+    // NEW: Delete all articles by user ID
+    public void deleteByUserId(Long userId, String requesterEmail) {
+        User requester = userService.findByEmail(requesterEmail).get();
+        boolean isAdmin = requester.getRole() == "ADMIN";
+
+        // Only admin can delete all articles of a user
+        if (!isAdmin) {
+            throw new RuntimeException("Only admin can delete all user articles");
+        }
+
+        List<Article> userArticles = articleRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        articleRepository.deleteAll(userArticles);
+    }
+
+    // NEW: Delete own articles (for user)
+    public void deleteMyArticles(String userEmail) {
+        User user = userRepository.findByEmail(userEmail).get();
+        List<Article> userArticles = articleRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+        articleRepository.deleteAll(userArticles);
+    }
+
+    public List<Article> getAllArticles() {
+        return articleRepository.findAll();
+    }
+
+    public List<Article> getDrafts() {
+        return articleRepository.findByStatusOrderByCreatedAtDesc("DRAFT");
+    }
+
+    public void updateStatus(Long id, String status, String adminEmail) {
+        Article article = articleRepository.findById(id).orElseThrow(() -> new RuntimeException("Article not found"));
+        article.setStatus(status.toUpperCase());
+        article.setUpdatedAt(LocalDateTime.now());
+        articleRepository.save(article);
+    }
+
+    public Article updateContent(Long id, String status, String content, String adminEmail) {
+        Article article = articleRepository.findById(id).orElseThrow(() -> new RuntimeException("Article not found"));
+        article.setStatus(status.toUpperCase());
+        article.setUpdatedAt(LocalDateTime.now());
+        article.setContent(content);
+        return articleRepository.save(article);
+    }
+
+    public void toggleFeature(Long id, boolean featured, String adminEmail) {
+        Article article = articleRepository.findById(id).orElseThrow(() -> new RuntimeException("Article not found"));
+        // Assuming you add a 'featured' boolean field to Article entity
+        // article.setFeatured(featured);
+        article.setUpdatedAt(LocalDateTime.now());
+        articleRepository.save(article);
+    }
+
 }

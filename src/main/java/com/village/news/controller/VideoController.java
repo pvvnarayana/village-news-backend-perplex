@@ -30,9 +30,11 @@ import com.village.news.service.VideoService;
 public class VideoController {
 
     private final VideoService videoService;
+    private final JwtService   jwtService;
 
-    public VideoController(VideoService videoService) {
+    public VideoController(VideoService videoService, JwtService jwtService) {
         this.videoService = videoService;
+        this.jwtService = jwtService;
     }
 
     @GetMapping
@@ -99,6 +101,53 @@ public class VideoController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Collections.emptyList());
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    public ResponseEntity<Map<String, String>> delete(@RequestHeader("Authorization") String hdr,
+                                                      @PathVariable Long id) {
+        try {
+            String token = extractToken(hdr);
+            String email = jwtService.getEmailFromToken(token);
+            videoService.delete(id, email);
+            return ResponseEntity.ok(Map.of("message", "Video deleted successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    private String extractToken(String authHeader) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7);
+        }
+        return authHeader; // Return as-is if no Bearer prefix
+    }
+    // NEW: Delete all my videos (for current user)
+    @DeleteMapping("/my/all")
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    public ResponseEntity<Map<String, String>> deleteMyVideos(@RequestHeader("Authorization") String hdr) {
+        try {
+            String email = jwtService.getEmailFromToken(hdr.substring(7));
+            videoService.deleteMyVideos(email);
+            return ResponseEntity.ok(Map.of("message", "All your videos deleted successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // NEW: Delete all videos by user ID (admin only)
+    @DeleteMapping("/user/{userId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, String>> deleteUserVideos(@RequestHeader("Authorization") String hdr,
+                                                                @PathVariable Long userId) {
+        try {
+            String email = jwtService.getEmailFromToken(hdr.substring(7));
+            videoService.deleteByUserId(userId, email);
+            return ResponseEntity.ok(Map.of("message", "All user videos deleted successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 }

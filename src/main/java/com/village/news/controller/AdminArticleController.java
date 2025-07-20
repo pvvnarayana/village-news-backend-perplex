@@ -4,8 +4,10 @@ import com.village.news.entity.Article;
 import com.village.news.entity.User;
 import com.village.news.repository.UserRepository;
 import com.village.news.service.ArticleService;
+import com.village.news.service.JwtService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,15 +16,17 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/articles")
-
+@PreAuthorize("hasRole('ADMIN')")
 public class AdminArticleController {
 
     private final ArticleService articleService;
     private final UserRepository userRepository;
+    private final JwtService jwtService;
 
-    public AdminArticleController(ArticleService articleService, UserRepository userRepository) {
+    public AdminArticleController(ArticleService articleService, UserRepository userRepository, JwtService jwtService) {
         this.articleService = articleService;
         this.userRepository = userRepository;
+        this.jwtService = jwtService;
     }
 
     @GetMapping("/pending")
@@ -107,6 +111,32 @@ public class AdminArticleController {
         } catch (Exception e) {
             System.err.println("Failed to get user ID from authentication: " + e.getMessage());
             throw new RuntimeException("Failed to identify admin user: " + e.getMessage());
+        }
+    }
+
+    // Delete any article (admin privilege)
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, String>> deleteArticle(@RequestHeader("Authorization") String hdr,
+                                                             @PathVariable Long id) {
+        try {
+            String adminEmail = jwtService.getEmailFromToken(hdr.substring(7));
+            articleService.deleteByUserId(id, adminEmail);
+            return ResponseEntity.ok(Map.of("message", "Article deleted successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // Delete all articles by specific user
+    @DeleteMapping("/user/{userId}")
+    public ResponseEntity<Map<String, String>> deleteUserArticles(@RequestHeader("Authorization") String hdr,
+                                                                  @PathVariable Long userId) {
+        try {
+            String adminEmail = jwtService.getEmailFromToken(hdr.substring(7));
+            articleService.deleteByUserId(userId, adminEmail);
+            return ResponseEntity.ok(Map.of("message", "All user articles deleted successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 }

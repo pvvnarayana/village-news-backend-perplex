@@ -2,8 +2,10 @@ package com.village.news.controller;
 
 import com.village.news.entity.Article;
 import com.village.news.service.ArticleService;
+import com.village.news.service.JwtService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,9 +18,11 @@ import java.util.Map;
 public class ArticleController {
 
     private final ArticleService articleService;
+    private final JwtService jwtService;
 
-    public ArticleController(ArticleService articleService) {
+    public ArticleController(ArticleService articleService, JwtService jwtService) {
         this.articleService = articleService;
+        this.jwtService = jwtService;
     }
 
     @GetMapping
@@ -111,6 +115,55 @@ public class ArticleController {
         } catch (Exception e) {
             System.err.println("Error fetching articles by user ID: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    public Article update(@RequestHeader("Authorization") String hdr,
+                          @PathVariable Long id,
+                          @RequestParam String title,
+                          @RequestParam String content) {
+        String email = jwtService.getEmailFromToken(hdr.substring(7));
+        return articleService.updateContent(id, title, content, email);
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    public ResponseEntity<Map<String, String>> delete(@RequestHeader("Authorization") String hdr,
+                                                      @PathVariable Long id) {
+        try {
+            String email = jwtService.getEmailFromToken(hdr.substring(7));
+            articleService.deleteArticle(id);
+            return ResponseEntity.ok(Map.of("message", "Article deleted successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // NEW: Delete all my articles (for current user)
+    @DeleteMapping("/my/all")
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    public ResponseEntity<Map<String, String>> deleteMyArticles(@RequestHeader("Authorization") String hdr) {
+        try {
+            String email = jwtService.getEmailFromToken(hdr.substring(7));
+            articleService.deleteMyArticles(email);
+            return ResponseEntity.ok(Map.of("message", "All your articles deleted successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // NEW: Delete all articles by user ID (admin only)
+    @DeleteMapping("/user/{userId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, String>> deleteUserArticles(@RequestHeader("Authorization") String hdr,
+                                                                  @PathVariable Long userId) {
+        try {
+            String email = jwtService.getEmailFromToken(hdr.substring(7));
+            articleService.deleteByUserId(userId, email);
+            return ResponseEntity.ok(Map.of("message", "All user articles deleted successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 }

@@ -34,15 +34,6 @@ public class JwtService {
                 .compact();
     }
     
-    public String getEmailFromToken(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(getSigningKey())
-                .build()
-                .parseClaimsJws(token)
-                .getBody()
-                .getSubject();
-    }
-    
     public Long getUserIdFromToken(String token) {
         Claims claims = Jwts.parserBuilder()
                 .setSigningKey(getSigningKey())
@@ -63,13 +54,53 @@ public class JwtService {
     
     public boolean validateToken(String token) {
         try {
+            if (token == null || token.trim().isEmpty()) {
+                return false;
+            }
+
+            // Remove Bearer prefix if present
+            if (token.startsWith("Bearer ")) {
+                token = token.substring(7);
+            }
+
             Jwts.parserBuilder()
-                .setSigningKey(getSigningKey())
-                .build()
-                .parseClaimsJws(token);
+                    .setSigningKey(getSigningKey())
+                    .build()
+                    .parseClaimsJws(token);
             return true;
+        } catch (io.jsonwebtoken.MalformedJwtException e) {
+            System.err.println("Malformed JWT token: " + e.getMessage());
+            return false;
         } catch (JwtException | IllegalArgumentException e) {
+            System.err.println("JWT validation error: " + e.getMessage());
             return false;
         }
     }
+
+    public String getEmailFromToken(String token) {
+        try {
+            // Remove Bearer prefix if present
+            if (token.startsWith("Bearer ")) {
+                token = token.substring(7);
+            }
+            else if(token.startsWith("jwt-")){
+                String[] parts = token.split("-");
+                if (parts.length >= 2) {
+                    return parts[1]; // Return the email part
+                } else {
+                    throw new RuntimeException("Invalid JWT format");
+                }
+            }
+
+            return Jwts.parserBuilder()
+                    .setSigningKey(getSigningKey())
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody()
+                    .getSubject();
+        } catch (Exception e) {
+            throw new RuntimeException("Invalid or malformed JWT token: " + e.getMessage());
+        }
+    }
+
 }

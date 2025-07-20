@@ -1,14 +1,22 @@
-# Start with a Java runtime
-FROM openjdk:17-jdk-alpine
+# ------------ STAGE 1: Build with Gradle ------------
+FROM gradle:8.4-jdk17 AS builder
+WORKDIR /app
 
-# Set working directory
-WORKDIR /appx`
+# Copy all files
+COPY --chown=gradle:gradle . .
 
-# Copy built JAR (adjust filename)
-COPY target/*.jar app.jar
+# Build the project (skip tests for faster CI builds)
+RUN gradle build -x test
+
+# ------------ STAGE 2: Run the JAR ------------
+FROM eclipse-temurin:17-jdk
+WORKDIR /app
+
+# Copy JAR from build stage
+COPY --from=builder /app/build/libs/*.jar app.jar
 
 # Expose port
 EXPOSE 8080
 
-# Run the jar file
+# Run the application
 ENTRYPOINT ["java", "-jar", "app.jar"]
